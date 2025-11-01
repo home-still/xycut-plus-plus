@@ -1,0 +1,14 @@
+[package]
+license = "GPL-3.0"
+description = "High-performance reading order detection for document layout analysis using XY-Cut++ algorithm"
+repository = "https://github.com/ladvien/xycut-plus-plus"
+keywords = ["document", "layout", "reading-order", "ocr", "pdf"]
+categories = ["algorithms", "computer-vision"]
+readme = "README.md"
+
+name = "xycut-plus-plus"
+version = "0.1.0"
+edition = "2021"
+authors = ["C. Thomas Brittain <cthomasbrittain@yahoo.com>"]
+
+[dependencies]

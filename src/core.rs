@@ -3,6 +3,7 @@ use core::f32;
 use crate::histogram::{build_horizontal_histogram, build_vertical_histogram, find_largest_gap};
 use crate::matching::partition_by_mask;
 use crate::traits::BoundingBox;
+use crate::utils::{compute_median_width, count_overlap};
 
 /// Configuration for XY-Cut algorithm
 #[derive(Debug, Clone)]
@@ -57,6 +58,45 @@ impl XYCut {
         )
     }
 
+    // TODO: Add this function before recursive_cut
+    /// Calculate density ratio τd (tau_d) from Equation 4-5
+    /// τd = Σ(w_k^(Cc) / h_k^(Cc)) / Σ(w_k^(Cs) / h_k^(Cs))
+    fn compute_density_ratio<T: BoundingBox>(elements: &[T], threshold: f32) -> f32 {
+        let mut cross_layout_density = 0.0; // Cc - wide elements
+        let mut single_layout_density = 0.0; // Cs - narrow elements
+
+        for element in elements {
+            let (x1, y1, x2, y2) = element.bounds();
+            let width = x2 - x1;
+            let height = y2 - y1;
+
+            // Avoid division by zero
+            if height == 0.0 {
+                continue;
+            }
+
+            let aspect_ratio = width / height;
+
+            // Classify element as cross-layout or single-layout
+            // If width > threshold, it's cross-layout (Cc)
+            // Otherwise, it's single-layout (Cs)
+
+            if width > threshold {
+                cross_layout_density += aspect_ratio;
+            } else {
+                single_layout_density += aspect_ratio;
+            }
+        }
+
+        // Return the ratio τd = cross_layout_density / single_layout_density
+        // Handle division by zero: if single_layout_density == 0.0, return 1.0
+        if single_layout_density == 0.0 {
+            return 1.0;
+        }
+
+        cross_layout_density / single_layout_density
+    }
+
     fn recursive_cut<T: BoundingBox>(
         &self,
         elements: &[T],
@@ -72,9 +112,15 @@ impl XYCut {
             return vec![elements[0].id()];
         }
 
-        // For large groups, try vertical cut first to detect columns
-        // Academic papers often have 2 columns, and the column gap is significant
-        let try_vertical_first = elements.len() > 10;
+        // Equation 1: Calculate threshold from median width
+        let median_width = compute_median_width(elements);
+        let threshold = 1.3 * median_width;
+
+        // Equation 4: Calculate density ration τd
+        let tau_d = Self::compute_density_ratio(elements, threshold);
+
+        // Equation 5: Use XY-Cut (vertical first) if τd > 0.9
+        let try_vertical_first = tau_d > 0.9;
 
         if try_vertical_first {
             // Try vertical cut first for multi-column layouts

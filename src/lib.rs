@@ -11,6 +11,7 @@ pub mod core;
 pub mod histogram;
 pub mod matching;
 pub mod traits;
+pub mod utils;
 
 pub use core::{XYCut, XYCutConfig};
 pub use traits::BoundingBox;

@@ -1,4 +1,5 @@
 use crate::traits::BoundingBox;
+use crate::utils::{compute_median_width, count_overlap};
 
 /// Result of pre-mask processing
 #[derive(Debug)]
@@ -14,6 +15,9 @@ pub fn partition_by_mask<T: BoundingBox>(elements: &[T], page_width: f32) -> Mas
     let mut masked_elements = Vec::new();
     let mut regular_elements = Vec::new();
 
+    let median_width = compute_median_width(elements);
+    let threshold = 1.3 * median_width;
+
     for element in elements {
         // Also mask wide-spanning elements (>70% page width)
         // This helps column detection by removing elements that span both columns
@@ -21,9 +25,10 @@ pub fn partition_by_mask<T: BoundingBox>(elements: &[T], page_width: f32) -> Mas
 
         let (x1, _, x2, _) = element.bounds();
         let width = x2 - x1;
-        let is_wide = width > (page_width * 0.7);
+        let overlap_count = count_overlap(element, elements);
+        let is_cross_layout = width > threshold && overlap_count >= 2;
 
-        if element.should_mask() || is_wide {
+        if element.should_mask() || is_cross_layout {
             masked_elements.push(element.clone());
         } else {
             regular_elements.push(element.clone());

@@ -2,7 +2,7 @@ use core::f32;
 
 use crate::histogram::{build_horizontal_histogram, build_vertical_histogram, find_largest_gap};
 use crate::matching::partition_by_mask;
-use crate::traits::BoundingBox;
+use crate::traits::{BoundingBox, SemanticLabel};
 use crate::utils::{compute_median_width, count_overlap};
 
 /// Configuration for XY-Cut algorithm
@@ -47,7 +47,8 @@ impl XYCut {
         y_max: f32,
     ) -> Vec<usize> {
         let page_width = x_max - x_min;
-        let partition = partition_by_mask(elements, page_width);
+        let page_height = y_max - y_min;
+        let partition = partition_by_mask(elements, page_width, page_height);
         let regular_order =
             self.recursive_cut(&partition.regular_elements, x_min, y_min, x_max, y_max);
 
@@ -334,12 +335,23 @@ impl XYCut {
         // Sort by y first (top-to-bottom), then x (left-to-right) for same row
         let mut sort_masked: Vec<T> = masked_elements.to_vec();
         sort_masked.sort_by(|a, b| {
+            // First: Sort by semantic label priority (Equation 7)
+            let priority_a = Self::label_priority(a.semantic_label());
+            let priority_b = Self::label_priority(b.semantic_label());
+
+            // Compare priorities first
+            let priority_order = priority_a.cmp(&priority_b);
+
+            if priority_order != std::cmp::Ordering::Equal {
+                // Different priorities: use priority ordering
+                return priority_order;
+            }
+
+            // Same priority: sort by position (y, then x)
             let y_diff = (a.center().1 - b.center().1).abs();
             if y_diff < self.config.same_row_tolerance {
-                // Elements are in same row, sort by x (left-to-right)
                 a.center().0.partial_cmp(&b.center().0).unwrap()
             } else {
-                // Different rows, sort by y (top-to-bottom)
                 a.center().1.partial_cmp(&b.center().1).unwrap()
             }
         });
@@ -411,5 +423,16 @@ impl XYCut {
             }
         }
         result
+    }
+
+    /// Get priority value for semantic label (lower = higher priority)
+    fn label_priority(label: SemanticLabel) -> u8 {
+        match label {
+            SemanticLabel::CrossLayout => 0,
+            SemanticLabel::HorizontalTitle => 1,
+            SemanticLabel::VerticalTitle => 1,
+            SemanticLabel::Vision => 2,
+            SemanticLabel::Regular => 3,
+        }
     }
 }

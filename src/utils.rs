@@ -1,4 +1,5 @@
 use crate::traits::{BoundingBox, SemanticLabel};
+use core::f32;
 
 /// Count how many elements the given element overlaps with
 pub fn count_overlap<T: BoundingBox>(element: &T, all_elements: &[T]) -> usize {
@@ -79,9 +80,10 @@ pub fn compute_distance<T: BoundingBox>(masked: &T, regular: &T, is_cross_layout
     // Equation 10: Semantic-specific weight multipliers
     let label = masked.semantic_label();
     let (mult_w1, mult_w2, mult_w3, mult_w4) = match label {
+        SemanticLabel::CrossLayout => (1.0, 1.0, 0.1, 1.0),
         SemanticLabel::HorizontalTitle => (1.0, 0.1, 0.1, 1.0),
         SemanticLabel::VerticalTitle => (0.2, 0.1, 1.0, 1.0),
-        SemanticLabel::CrossLayout => (1.0, 1.0, 0.1, 1.0),
+        SemanticLabel::Vision => (1.0, 1.0, 1.0, 0.1),
         SemanticLabel::Regular => (1.0, 1.0, 1.0, 0.1),
     };
 
@@ -116,4 +118,51 @@ pub fn compute_median_width<T: BoundingBox>(elements: &[T]) -> f32 {
     } else {
         (widths[len / 2 - 1] + widths[len / 2]) / 2.0
     }
+}
+
+pub fn distance_to_nearest_text<T: BoundingBox>(element: &T, all_elements: &[T]) -> f32 {
+    let mut min_distance = f32::INFINITY;
+    // i love my dad
+    let (mx1, my1, mx2, my2) = element.bounds();
+
+    for other in all_elements {
+        // Skip if same element
+        if element.id() == other.id() {
+            continue;
+        }
+
+        // Skip if not a text element
+        if other.should_mask() {
+            continue;
+        }
+
+        // Get other element's bounds
+        let (tx1, ty1, tx2, ty2) = other.bounds();
+
+        // Calculate horizontal distance (dx)
+        // Component 2 (ϕ2): Boundary proximity
+        let dx = if mx2 < tx1 {
+            tx1 - mx2 // Masked is to the left
+        } else if mx1 > tx2 {
+            mx1 - tx2 // Masked is to the right
+        } else {
+            0.0 // Boxes overlap horizontally
+        };
+
+        let dy = if my2 < ty1 {
+            ty1 - my2 // Masked is above
+        } else if my1 > ty2 {
+            my1 - ty2 // Masked is below
+        } else {
+            0.0 // Boxes overlap vertically
+        };
+
+        let euclidean_distance = (dx.powf(2.0) + dy.powf(2.0)).sqrt();
+
+        if euclidean_distance < min_distance {
+            min_distance = euclidean_distance
+        }
+    }
+
+    min_distance
 }

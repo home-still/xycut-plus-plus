@@ -1,8 +1,9 @@
 #[derive(Debug, Clone, Copy)]
 pub enum SemanticLabel {
+    CrossLayout,
     HorizontalTitle,
     VerticalTitle,
-    CrossLayout,
+    Vision,
     Regular,
 }
 

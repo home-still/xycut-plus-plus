@@ -3,7 +3,7 @@ use core::f32;
 use crate::histogram::{build_horizontal_histogram, build_vertical_histogram, find_largest_gap};
 use crate::matching::partition_by_mask;
 use crate::traits::{BoundingBox, SemanticLabel};
-use crate::utils::{compute_distance, compute_median_width};
+use crate::utils::compute_distance_with_early_exit;
 
 /// Configuration for XY-Cut algorithm
 #[derive(Debug, Clone)]
@@ -352,12 +352,12 @@ impl XYCut {
         for masked in &sort_masked {
             // Find best insertion position using 4-component distance metric
             let mut best_distance = f32::INFINITY;
-            let mut best_position = 0;
+            let mut best_regular_id: Option<usize> = None;
 
             // Get masked element's semantic priority for constraint checking
             let masked_priority = Self::label_priority(masked.semantic_label());
 
-            for (i, regular_id) in regular_order.iter().enumerate() {
+            for regular_id in regular_order.iter() {
                 // Find the regular element by id
                 if let Some(regular) = regular_elements.iter().find(|e| e.id() == *regular_id) {
                     // Enforce L'o ⪰ l constraint (Equation 7)
@@ -368,22 +368,24 @@ impl XYCut {
                     }
 
                     // Use 4-component distance metric (Equations 8-10)
-                    let distance = compute_distance(masked, regular);
+                    let distance = compute_distance_with_early_exit(masked, regular, best_distance);
                     if distance < best_distance {
                         best_distance = distance;
-                        best_position = i;
+                        best_regular_id = Some(*regular_id);
                     }
                 }
             }
 
             // Insert masked element at best position
-            // If valid match found, insert after the matched element
-            // Otherwise, fall back to position-based insertion
-            if best_distance < f32::INFINITY {
-                result.insert(best_position + 1, masked.id());
+            // If valid match found, insert after the matched element (by ID)
+            if let Some(matched_id) = best_regular_id {
+                // Find where this element currently is in result (handles growing array)
+                if let Some(position) = result.iter().position(|&id| id == matched_id) {
+                    result.insert(position + 1, masked.id());
+                }
             } else {
                 // No overlap - find insertion by y-position AND x-position (column-aware)
-                let (masked_x, masked_y) = masked.center();
+                let (_, masked_y) = masked.center();
 
                 // Get masked element bounds and width
                 let masked_bounds = masked.bounds();
@@ -399,7 +401,7 @@ impl XYCut {
                 // This is important because result changes as we insert elements
                 for (i, regular_id) in result.iter().enumerate() {
                     if let Some(regular) = regular_elements.iter().find(|e| e.id() == *regular_id) {
-                        let (regular_x, regular_y) = regular.center();
+                        let (_, regular_y) = regular.center();
 
                         // If is_spanning, only check y-position
                         if is_spanning {

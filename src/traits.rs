@@ -1,3 +1,11 @@
+#[derive(Debug, Clone, Copy)]
+pub enum SemanticLabel {
+    HorizontalTitle,
+    VerticalTitle,
+    CrossLayout,
+    Regular,
+}
+
 /// Core trait that any bounding box must implement to use XY-Cut++
 pub trait BoundingBox: Clone {
     /// Returns unique identifier for this element
@@ -14,4 +22,7 @@ pub trait BoundingBox: Clone {
 
     /// Whether element should be masked (titles, figures, tables)
     fn should_mask(&self) -> bool;
+
+    /// Returns the semantic label type for this element
+    fn semantic_label(&self) -> SemanticLabel;
 }

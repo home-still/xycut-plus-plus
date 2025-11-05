@@ -1,4 +1,4 @@
-use crate::traits::BoundingBox;
+use crate::traits::{BoundingBox, SemanticLabel};
 
 /// Count how many elements the given element overlaps with
 pub fn count_overlap<T: BoundingBox>(element: &T, all_elements: &[T]) -> usize {
@@ -17,6 +17,81 @@ pub fn count_overlap<T: BoundingBox>(element: &T, all_elements: &[T]) -> usize {
             (x1 < ox2 && x2 > ox1) && (y1 < oy2 && y2 > oy1)
         })
         .count()
+}
+
+/// Calculate 4-component distance metric from paper (Equation 8)
+/// D(Bp, B'o, l) = Σ wk · ϕk(Bp, B'o)
+pub fn compute_distance<T: BoundingBox>(masked: &T, regular: &T, is_cross_layout: bool) -> f32 {
+    let (mx1, my1, mx2, my2) = masked.bounds();
+    let (rx1, ry1, rx2, ry2) = regular.bounds();
+
+    // Component 1 (ϕ1): Intersection constraint
+    // If boxes overlap, phi1 = 0, else phi1 = large penalty
+    let boxes_overlap = (mx1 < rx2 && mx2 > rx1) && (my1 < ry2 && my2 > ry1);
+    let phi1 = if boxes_overlap { 0.0 } else { 100.0 };
+
+    // Component 2 (ϕ2): Boundary proximity
+    let dx = if mx2 < rx1 {
+        rx1 - mx2 // Masked is to the left
+    } else if mx1 > rx2 {
+        mx1 - rx2 // Masked is to the right
+    } else {
+        0.0 // Boxes overlap horizontally
+    };
+
+    let dy = if my2 < ry1 {
+        ry1 - my2 // Masked is above
+    } else if my1 > ry2 {
+        my1 - ry2 // Masked is below
+    } else {
+        0.0 // Boxes overlap vertically
+    };
+
+    let phi2 = if is_cross_layout {
+        dx + dy // Diagonal distance for cross-layout
+    } else {
+        dx.min(dy) // Axis-aligned distance for single-column
+    };
+
+    // Component 3 (ϕ3): Vertical continuity
+    let phi3 = if is_cross_layout {
+        -my2 // Cross-layout: prefer above (negative y means higher up)
+    } else {
+        ry1 // Single column: prefer below (positive y means further down)
+    };
+
+    // Component 4 (ϕ4): Horizontal ordering
+    let phi4 = rx1;
+
+    // Calculate masked element dimensions (width, height)
+    let mw = mx2 - mx1;
+    let mh = my2 - my1;
+    let max_dim = mw.max(mh);
+
+    // Calculate max_dim = mw.max(mh)
+    // Calculate base weights [max_dim², max_dim, 1.0, 1.0/max_dim]
+
+    let base_w1 = max_dim * max_dim;
+    let base_w2 = max_dim;
+    let base_w3 = 1.0;
+    let base_w4 = 1.0 / max_dim;
+
+    // Equation 10: Semantic-specific weight multipliers
+    let label = masked.semantic_label();
+    let (mult_w1, mult_w2, mult_w3, mult_w4) = match label {
+        SemanticLabel::HorizontalTitle => (1.0, 0.1, 0.1, 1.0),
+        SemanticLabel::VerticalTitle => (0.2, 0.1, 1.0, 1.0),
+        SemanticLabel::CrossLayout => (1.0, 1.0, 0.1, 1.0),
+        SemanticLabel::Regular => (1.0, 1.0, 1.0, 0.1),
+    };
+
+    // Apply semantic multipliers to base weights
+    let w1 = base_w1 * mult_w1;
+    let w2 = base_w2 * mult_w2;
+    let w3 = base_w3 * mult_w3;
+    let w4 = base_w4 * mult_w4;
+
+    w1 * phi1 + w2 * phi2 + w3 * phi3 + w4 * phi4
 }
 
 /// Calculate median width of elements

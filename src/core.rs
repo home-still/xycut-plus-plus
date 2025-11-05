@@ -3,7 +3,7 @@ use core::f32;
 use crate::histogram::{build_horizontal_histogram, build_vertical_histogram, find_largest_gap};
 use crate::matching::partition_by_mask;
 use crate::traits::{BoundingBox, SemanticLabel};
-use crate::utils::{compute_median_width, count_overlap};
+use crate::utils::{compute_distance, compute_median_width};
 
 /// Configuration for XY-Cut algorithm
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ impl XYCut {
     // TODO: Add this function before recursive_cut
     /// Calculate density ratio τd (tau_d) from Equation 4-5
     /// τd = Σ(w_k^(Cc) / h_k^(Cc)) / Σ(w_k^(Cs) / h_k^(Cs))
-    fn compute_density_ratio<T: BoundingBox>(elements: &[T], threshold: f32) -> f32 {
+    fn compute_density_ratio<T: BoundingBox>(elements: &[T]) -> f32 {
         let mut cross_layout_density = 0.0; // Cc - wide elements
         let mut single_layout_density = 0.0; // Cs - narrow elements
 
@@ -78,14 +78,10 @@ impl XYCut {
 
             let aspect_ratio = width / height;
 
-            // Classify element as cross-layout or single-layout
-            // If width > threshold, it's cross-layout (Cc)
-            // Otherwise, it's single-layout (Cs)
-
-            if width > threshold {
-                cross_layout_density += aspect_ratio;
-            } else {
-                single_layout_density += aspect_ratio;
+            // Use semantic label instead of width threshold
+            match element.semantic_label() {
+                SemanticLabel::CrossLayout => cross_layout_density += aspect_ratio,
+                _ => single_layout_density += aspect_ratio,
             }
         }
 
@@ -113,12 +109,8 @@ impl XYCut {
             return vec![elements[0].id()];
         }
 
-        // Equation 1: Calculate threshold from median width
-        let median_width = compute_median_width(elements);
-        let threshold = 1.3 * median_width;
-
         // Equation 4: Calculate density ration τd
-        let tau_d = Self::compute_density_ratio(elements, threshold);
+        let tau_d = Self::compute_density_ratio(elements);
 
         // Equation 5: Use XY-Cut (vertical first) if τd > 0.9
         let try_vertical_first = tau_d > 0.9;
@@ -358,25 +350,36 @@ impl XYCut {
 
         // For each masked element, find where to insert it
         for masked in &sort_masked {
-            // Find best insertion position by checking IoU with regular elements
-            let mut best_iou = 0.0;
+            // Find best insertion position using 4-component distance metric
+            let mut best_distance = f32::INFINITY;
             let mut best_position = 0;
+
+            // Get masked element's semantic priority for constraint checking
+            let masked_priority = Self::label_priority(masked.semantic_label());
 
             for (i, regular_id) in regular_order.iter().enumerate() {
                 // Find the regular element by id
                 if let Some(regular) = regular_elements.iter().find(|e| e.id() == *regular_id) {
-                    let iou = masked.iou(regular);
-                    if iou > best_iou {
-                        best_iou = iou;
+                    // Enforce L'o ⪰ l constraint (Equation 7)
+                    // Regular element must have equal or lower priority than masked
+                    let regular_priority = Self::label_priority(regular.semantic_label());
+                    if regular_priority < masked_priority {
+                        continue;
+                    }
+
+                    // Use 4-component distance metric (Equations 8-10)
+                    let distance = compute_distance(masked, regular);
+                    if distance < best_distance {
+                        best_distance = distance;
                         best_position = i;
                     }
                 }
             }
 
             // Insert masked element at best position
-            // If IoU > 0, insert after the matched element
-            // Otherwise, insert based on y-position
-            if best_iou > 0.0 {
+            // If valid match found, insert after the matched element
+            // Otherwise, fall back to position-based insertion
+            if best_distance < f32::INFINITY {
                 result.insert(best_position + 1, masked.id());
             } else {
                 // No overlap - find insertion by y-position AND x-position (column-aware)

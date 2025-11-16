@@ -7,7 +7,7 @@ categories = ["algorithms", "computer-vision"]
 readme = "README.md"
 
 name = "xycut-plus-plus"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["C. Thomas Brittain <cthomasbrittain@yahoo.com>"]
 

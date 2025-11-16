@@ -116,22 +116,23 @@ pub fn compute_distance_with_early_exit<T: BoundingBox>(
         return distance;
     }
 
+    // Component 3 (ϕ3): Vertical continuity
     let phi3 = if is_cross_layout {
-        // Component 3 (ϕ3): Vertical continuity
-        // For cross-layout:
+        // Cross-layout: Prefer elements above current position
         if my1 > ry2 {
-            my1 - ry2 // masked below regular - penalize
+            my1 - ry2 // Masked is below regular - penalize
         } else {
-            -my2 // Masked above or overlaps - prefer higher position
+            -my2 // Masked is above or overlaps - prefer higher position
         }
     } else {
-        // For single-column:
+        // Single column: Prefer elements below (reading flow)
         if ry1 >= my2 {
             ry1 - my1 // Regular below - baseline alignment (top-to-top)
         } else {
             (my2 - ry1) * 10.0 // Regular above - scaled penalty
         }
     };
+
     distance += w3 * phi3;
     if distance > current_best {
         return distance;

@@ -17,7 +17,9 @@ pub fn build_horizontal_histogram<T: BoundingBox>(
         let end_bin = ((y2 - y_min) / bin_height).ceil().min(resolution as f32) as usize;
 
         for bin in start_bin..end_bin.min(resolution) {
-            histogram[bin] += 1;
+            if bin < histogram.len() {
+                histogram[bin] += 1;
+            }
         }
     }
 
@@ -40,8 +42,14 @@ pub fn build_vertical_histogram<T: BoundingBox>(
         let start_bin = ((x1 - x_min) / bin_width).floor().max(0.0) as usize;
         let end_bin = ((x2 - x_min) / bin_width).ceil().min(resolution as f32) as usize;
 
+        // TODO: Add bounds checking to prevent panic
+        // Change to: if bin < histogram.len() { histogram[bin] += 1; }
+
+        // TEMPORARY: Unsafe array access
         for bin in start_bin..end_bin.min(resolution) {
-            histogram[bin] += 1;
+            if bin < histogram.len() {
+                histogram[bin] += 1;
+            }
         }
     }
 

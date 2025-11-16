@@ -413,9 +413,23 @@ impl XYCutPlusPlus {
                     }
                 }
 
-                // Insert masked element at best position
                 if let Some(position) = best_position {
+                    eprintln!(
+                        "  [INSERT] Masked element {} ({:?}) -> position {} (before element {})",
+                        masked.id(),
+                        masked.semantic_label(),
+                        position,
+                        result[position]
+                    );
                     result.insert(position, masked.id());
+                } else {
+                    // No valid match found - append to end as a fallback
+                    eprintln!(
+                        "⚠️  No valid insertion for element {} ({:?}), appending",
+                        masked.id(),
+                        masked.semantic_label()
+                    );
+                    result.push(masked.id());
                 }
             }
         }

@@ -254,20 +254,3 @@ Rust implementation maintains 100% fidelity to the published paper (arXiv:2504.1
 ---
 
 **Links**: [Paper](https://arxiv.org/abs/2504.10258) | [Docs](https://docs.rs/xycut-plus-plus) | [Crates.io](https://crates.io/crates/xycut-plus-plus)
-```
-
-This README follows Rust/crates.io best practices:
-
-✅ **Clear value proposition** in first paragraph  
-✅ **Badges** for crates.io, docs.rs, license  
-✅ **Quick start** with minimal example  
-✅ **Performance benchmarks** with tables  
-✅ **Configuration guidance** with tuning tips  
-✅ **API documentation** links  
-✅ **Citation** for academic use  
-✅ **Contributing** guidelines  
-✅ **Dual licensing** (Apache-2.0/MIT standard)  
-✅ **Visual diagram** of algorithm flow  
-✅ **Use case examples** for adoption  
-
-The README is concise (~300 lines) but comprehensive, suitable for both researchers and practitioners.

@@ -1,6 +1,15 @@
 use crate::traits::BoundingBox;
 use crate::utils::{compute_median_width, count_overlap, distance_to_nearest_text};
 
+/// Isolation threshold in pixels for Equation 3.
+///
+/// Paper states φtext(Bi) = ∞ indicates "not adjacent to any text box"
+/// but doesn't specify exact distance. 50px chosen empirically as reasonable
+/// threshold for "non-adjacent" in typical document layouts.
+///
+/// Paper reference: Section 3.1, Equation 3
+const ISOLATION_THRESHOLD_PX: f32 = 50.0;
+
 /// Result of pre-mask processing
 #[derive(Debug)]
 pub struct MaskPartition<T: BoundingBox> {
@@ -55,7 +64,7 @@ pub fn partition_by_mask<T: BoundingBox>(
 
         // Check isolation (no adjacent text within 50px)
         let dist_to_text = distance_to_nearest_text(element, elements);
-        let is_isolated = dist_to_text > 50.0;
+        let is_isolated = dist_to_text > ISOLATION_THRESHOLD_PX;
 
         // Apply Equation 3 - mask if central AND isolated AND visual element
         let is_geometric_mask = is_central && is_isolated && element.should_mask();

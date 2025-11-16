@@ -8,6 +8,16 @@ pub enum SemanticLabel {
 }
 
 /// Core trait that any bounding box must implement to use XY-Cut++
+///
+/// # Paper Reference
+/// Corresponds to Equation 6 atomic region representation:
+/// ```text
+/// Ri = ⟨x₁⁽ⁱ⁾, y₁⁽ⁱ⁾, x₂⁽ⁱ⁾, y₂⁽ⁱ⁾, Ci⟩, Ci ∈ Ctype
+/// ```
+/// where Ctype distinguishes Cross-layout (spanning multiple grid units)
+/// and Single-layout (contained within one grid unit) components.
+///
+/// Paper reference: Section 3.1, Equation 6, page 4
 pub trait BoundingBox: Clone {
     /// Returns unique identifier for this element
     fn id(&self) -> usize;

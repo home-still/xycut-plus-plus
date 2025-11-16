@@ -40,36 +40,34 @@ pub fn compute_distance_with_early_exit<T: BoundingBox>(
 
     // Detect element orientation from aspect ratio
     let is_horizontal = mw > mh;
-    let aspect_ratio = if mh > 0.0 { mw / mh } else { 1.0 };
-    let strongly_horizontal = aspect_ratio > 2.0;
-    let strongly_vertical = aspect_ratio < 0.5;
 
     let base_w1 = max_dim * max_dim;
     let base_w2 = max_dim;
     let base_w3 = 1.0;
     let base_w4 = 1.0 / max_dim;
 
-    // Equation 10: Semantic AND orientation-specific multipliers
-    // Replace the simple match with a match (label, is_horizontal) pattern
+    // Paper reference: Section 3.2, page 5, Table 2
+    // Weights determined from grid search on 2.8k documents
     let label = masked.semantic_label();
-    let (mult_w1, mult_w2, mult_w3, mult_w4) = match (label, is_horizontal) {
-        // CrossLayout: Orientation doesn't matter (always wide spanning)
-        (SemanticLabel::CrossLayout, _) => (1.0, 1.0, 0.1, 1.0),
-        // HorzontalTitle: Adjust if actually vertical
-        (SemanticLabel::HorizontalTitle, true) => (1.0, 0.1, 0.1, 1.0), // Expected
-        (SemanticLabel::HorizontalTitle, false) => (1.0, 0.5, 0.5, 0.5), // UNexpected
-        //VerticalTitle: Adjust if actually horizontal
-        (SemanticLabel::VerticalTitle, false) => (0.2, 0.1, 1.0, 1.0), // Expected,
-        (SemanticLabel::VerticalTitle, true) => (0.5, 0.5, 0.5, 0.5),  // UNexpected,
-        // Vision: Detect table vs figure orientation
-        (SemanticLabel::Vision, true) if strongly_horizontal => (1.0, 1.0, 0.5, 0.1),
-        // Wide table
-        (SemanticLabel::Vision, false) if strongly_vertical => (1.0, 0.5, 1.0, 0.1),
-        // Tall figure
-        (SemanticLabel::Vision, _) => (1.0, 1.0, 1.0, 0.1), // Square-ish
+    let (mult_w1, mult_w2, mult_w3, mult_w4) = match label {
+        // Lcross-layout: [1, 1, 0.1, 1]
+        SemanticLabel::CrossLayout => (1.0, 1.0, 0.1, 1.0),
 
-        // Regular: Standard weights
-        (SemanticLabel::Regular, _) => (1.0, 1.0, 1.0, 0.1),
+        // Ltitle: Check ACTUAL orientation (not semantic label name)
+        // Paper uses intersection: Ltitle ∩ Ohoriz and Ltitle ∩ Overt
+        SemanticLabel::HorizontalTitle | SemanticLabel::VerticalTitle => {
+            if is_horizontal {
+                // Ltitle ∩ Ohoriz: [1, 0.1, 0.1, 1]
+                (1.0, 0.1, 0.1, 1.0)
+            } else {
+                // Ltitle ∩ Overt: [0.2, 0.1, 1, 1]
+                (0.2, 0.1, 1.0, 1.0)
+            }
+        }
+
+        // Lotherwise: [1, 1, 1, 0.1]
+        // Applies to Vision, Regular, and all other cases
+        _ => (1.0, 1.0, 1.0, 0.1),
     };
 
     // Apply semantic multipliers to base weights

@@ -28,11 +28,11 @@ impl Default for XYCutConfig {
     }
 }
 
-pub struct XYCut {
+pub struct XYCutPlusPlus {
     config: XYCutConfig,
 }
 
-impl XYCut {
+impl XYCutPlusPlus {
     pub fn new(config: XYCutConfig) -> Self {
         Self { config }
     }
@@ -46,8 +46,28 @@ impl XYCut {
         x_max: f32,
         y_max: f32,
     ) -> Vec<usize> {
+        // Validate empty input
+        if elements.is_empty() {
+            return Vec::new();
+        }
+
         let page_width = x_max - x_min;
         let page_height = y_max - y_min;
+
+        // Validate page dimensions
+        if !page_width.is_finite()
+            || !page_height.is_finite()
+            || page_width <= 0.0
+            || page_height <= 0.0
+        {
+            eprintln!(
+                "Warning: Invalid page dimensions ({}, {})",
+                page_width, page_height
+            );
+
+            return Vec::new();
+        }
+
         let partition = partition_by_mask(elements, page_width, page_height);
         let regular_order =
             self.recursive_cut(&partition.regular_elements, x_min, y_min, x_max, y_max);
@@ -288,10 +308,16 @@ impl XYCut {
             let y_diff = (a.1.center().1 - b.1.center().1).abs();
             if y_diff < self.config.same_row_tolerance {
                 // Same row - sort by x
-                a.1.center().0.partial_cmp(&b.1.center().0).unwrap()
+                a.1.center()
+                    .0
+                    .partial_cmp(&b.1.center().0)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             } else {
                 // Different rows - sort by y
-                a.1.center().1.partial_cmp(&b.1.center().1).unwrap()
+                a.1.center()
+                    .1
+                    .partial_cmp(&b.1.center().1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             }
         });
 
@@ -323,120 +349,76 @@ impl XYCut {
         // Start with regular order as base
         let mut result: Vec<usize> = regular_order.to_vec();
 
-        // This ensures top elements (like page titles) are inserted first
-        // Sort by y first (top-to-bottom), then x (left-to-right) for same row
-        let mut sort_masked: Vec<T> = masked_elements.to_vec();
-        // sort_masked.sort_by(|a, b| {
-        //     // First: Sort by semantic label priority (Equation 7)
-        //     let priority_a = Self::label_priority(a.semantic_label());
-        //     let priority_b = Self::label_priority(b.semantic_label());
-
-        //     // Compare priorities first
-        //     let priority_order = priority_a.cmp(&priority_b);
-
-        //     if priority_order != std::cmp::Ordering::Equal {
-        //         // Different priorities: use priority ordering
-        //         return priority_order;
-        //     }
-
-        //     // Same priority: sort by position (y, then x)
-        //     let y_diff = (a.center().1 - b.center().1).abs();
-        //     if y_diff < self.config.same_row_tolerance {
-        //         a.center().0.partial_cmp(&b.center().0).unwrap()
-        //     } else {
-        //         a.center().1.partial_cmp(&b.center().1).unwrap()
-        //     }
-        // });
-
-        sort_masked.sort_by(|a, b| {
-            let y_diff = (a.center().1 - b.center().1).abs();
-            if y_diff < self.config.same_row_tolerance {
-                a.center().0.partial_cmp(&b.center().0).unwrap()
-            } else {
-                a.center().1.partial_cmp(&b.center().1).unwrap()
-            }
-        });
-
-        // For each masked element, find where to insert it
-        for masked in &sort_masked {
-            // Find best insertion position using 4-component distance metric
-            let mut best_distance = f32::INFINITY;
-            let mut best_regular_id: Option<usize> = None;
-
-            // Get masked element's semantic priority for constraint checking
-            let masked_priority = Self::label_priority(masked.semantic_label());
-
-            for regular_id in regular_order.iter() {
-                // Find the regular element by id
-                if let Some(regular) = regular_elements.iter().find(|e| e.id() == *regular_id) {
-                    // Enforce L'o ⪰ l constraint (Equation 7)
-                    // Regular element must have equal or lower priority than masked
-                    let regular_priority = Self::label_priority(regular.semantic_label());
-                    if regular_priority < masked_priority {
-                        continue;
-                    }
-
-                    // Use 4-component distance metric (Equations 8-10)
-                    let distance = compute_distance_with_early_exit(masked, regular, best_distance);
-                    if distance < best_distance {
-                        best_distance = distance;
-                        best_regular_id = Some(*regular_id);
-                    }
-                }
-            }
-
-            // Insert masked element at best position
-            // If valid match found, insert after the matched element (by ID)
-            if let Some(matched_id) = best_regular_id {
-                // Find where this element currently is in result (handles growing array)
-                if let Some(position) = result.iter().position(|&id| id == matched_id) {
-                    result.insert(position, masked.id());
-                }
-            } else {
-                // No overlap - find insertion by y-position AND x-position (column-aware)
-                let (_, masked_y) = masked.center();
-
-                // Get masked element bounds and width
-                let masked_bounds = masked.bounds();
-                let masked_width = masked_bounds.2 - masked_bounds.0;
-
-                // Check if this is a wide spanning element (>60% page width)
-                let page_width = self.compute_page_width(regular_elements);
-                let is_spanning = masked_width > (page_width * 0.6);
-
-                let mut insert_pos = result.len();
-
-                // Iterate over result instead of regular_order
-                // This is important because result changes as we insert elements
-                for (i, regular_id) in result.iter().enumerate() {
-                    if let Some(regular) = regular_elements.iter().find(|e| e.id() == *regular_id) {
-                        let (_, regular_y) = regular.center();
-
-                        // If is_spanning, only check y-position
-                        if is_spanning {
-                            if regular_y > masked_y {
-                                insert_pos = i;
-                                break;
-                            }
-                        } else {
-                            // Use LEFT EDGE distance instead of center distance
-                            // This fixes column detection for boxes with different widths
-                            let masked_left = masked.bounds().0;
-                            let regular_left = regular.bounds().0;
-                            let same_column = (regular_left - masked_left).abs() < 100.0;
-
-                            // Replace above with column-aware check
-                            if same_column && regular_y > masked_y {
-                                insert_pos = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-                result.insert(insert_pos, masked.id());
+        let mut priority_groups: Vec<Vec<T>> = vec![Vec::new(); 4];
+        for element in masked_elements {
+            let priority = Self::label_priority(element.semantic_label()) as usize;
+            if priority < 4 {
+                priority_groups[priority].push(element.clone());
             }
         }
 
+        // Process each priority group in order (CrossLayout → Title → Vision → Regular)
+        for mut group in priority_groups {
+            // Within each priority group, sort by reading order (y, then x)
+            group.sort_by(|a, b| {
+                let y_diff = (a.center().1 - b.center().1).abs();
+                if y_diff < self.config.same_row_tolerance {
+                    a.center()
+                        .0
+                        .partial_cmp(&b.center().0)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    a.center()
+                        .1
+                        .partial_cmp(&b.center().1)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                }
+            });
+
+            // Process each element in this priority group
+            for masked in &group {
+                // Find the best insertion position using 4-component distance metric
+                let mut best_distance = f32::INFINITY;
+                let mut best_position: Option<usize> = None;
+
+                // Get masked element's semantic priority for constraint checking
+                let masked_priority = Self::label_priority(masked.semantic_label());
+
+                // Search through result to handle growing array correctly
+                for (idx, &elem_id) in result.iter().enumerate() {
+                    // Find the element - could be regular OR previously inserted masked
+                    let candidate = regular_elements
+                        .iter()
+                        .find(|e| e.id() == elem_id)
+                        .cloned()
+                        .or_else(|| {
+                            // Also check masked elements from ALL groups
+                            masked_elements.iter().find(|e| e.id() == elem_id).cloned()
+                        });
+
+                    if let Some(candidate) = candidate {
+                        // Enforce L'o ⪰ l constraint (Equation 7)
+                        let candidate_priority = Self::label_priority(candidate.semantic_label());
+                        if candidate_priority < masked_priority {
+                            continue;
+                        }
+
+                        // Use 4-component distance metric
+                        let distance =
+                            compute_distance_with_early_exit(masked, &candidate, best_distance);
+                        if distance < best_distance {
+                            best_distance = distance;
+                            best_position = Some(idx);
+                        }
+                    }
+                }
+
+                // Insert masked element at best position
+                if let Some(position) = best_position {
+                    result.insert(position, masked.id());
+                }
+            }
+        }
         result
     }
 

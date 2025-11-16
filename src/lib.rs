@@ -13,7 +13,7 @@ pub mod matching;
 pub mod traits;
 pub mod utils;
 
-pub use core::{XYCut, XYCutConfig};
+pub use core::{XYCutPlusPlus, XYCutConfig};
 pub use traits::BoundingBox;
 
 #[cfg(test)]

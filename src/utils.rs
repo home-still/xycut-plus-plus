@@ -38,19 +38,38 @@ pub fn compute_distance_with_early_exit<T: BoundingBox>(
     let mh = my2 - my1;
     let max_dim = mw.max(mh);
 
+    // Detect element orientation from aspect ratio
+    let is_horizontal = mw > mh;
+    let aspect_ratio = if mh > 0.0 { mw / mh } else { 1.0 };
+    let strongly_horizontal = aspect_ratio > 2.0;
+    let strongly_vertical = aspect_ratio < 0.5;
+
     let base_w1 = max_dim * max_dim;
     let base_w2 = max_dim;
     let base_w3 = 1.0;
     let base_w4 = 1.0 / max_dim;
 
-    // Equation 10: Semantic-specific weight multipliers
+    // Equation 10: Semantic AND orientation-specific multipliers
+    // Replace the simple match with a match (label, is_horizontal) pattern
     let label = masked.semantic_label();
-    let (mult_w1, mult_w2, mult_w3, mult_w4) = match label {
-        SemanticLabel::CrossLayout => (1.0, 1.0, 0.1, 1.0),
-        SemanticLabel::HorizontalTitle => (1.0, 0.1, 0.1, 1.0),
-        SemanticLabel::VerticalTitle => (0.2, 0.1, 1.0, 1.0),
-        SemanticLabel::Vision => (1.0, 1.0, 1.0, 0.1),
-        SemanticLabel::Regular => (1.0, 1.0, 1.0, 0.1),
+    let (mult_w1, mult_w2, mult_w3, mult_w4) = match (label, is_horizontal) {
+        // CrossLayout: Orientation doesn't matter (always wide spanning)
+        (SemanticLabel::CrossLayout, _) => (1.0, 1.0, 0.1, 1.0),
+        // HorzontalTitle: Adjust if actually vertical
+        (SemanticLabel::HorizontalTitle, true) => (1.0, 0.1, 0.1, 1.0), // Expected
+        (SemanticLabel::HorizontalTitle, false) => (1.0, 0.5, 0.5, 0.5), // UNexpected
+        //VerticalTitle: Adjust if actually horizontal
+        (SemanticLabel::VerticalTitle, false) => (0.2, 0.1, 1.0, 1.0), // Expected,
+        (SemanticLabel::VerticalTitle, true) => (0.5, 0.5, 0.5, 0.5),  // UNexpected,
+        // Vision: Detect table vs figure orientation
+        (SemanticLabel::Vision, true) if strongly_horizontal => (1.0, 1.0, 0.5, 0.1),
+        // Wide table
+        (SemanticLabel::Vision, false) if strongly_vertical => (1.0, 0.5, 1.0, 0.1),
+        // Tall figure
+        (SemanticLabel::Vision, _) => (1.0, 1.0, 1.0, 0.1), // Square-ish
+
+        // Regular: Standard weights
+        (SemanticLabel::Regular, _) => (1.0, 1.0, 1.0, 0.1),
     };
 
     // Apply semantic multipliers to base weights
@@ -97,16 +116,20 @@ pub fn compute_distance_with_early_exit<T: BoundingBox>(
         return distance;
     }
 
-    // Component 3 (ϕ3): Vertical continuity
     let phi3 = if is_cross_layout {
-        -my2 // Cross-layout: prefer above (negative y means higher up)
-    } else {
-        // For titles/figures: prefer regular elements below them
-        // Use vertical distance, penalize if regular is above
-        if ry1 >= my2 {
-            ry1 - my2 // Regular below masked - distance is good
+        // Component 3 (ϕ3): Vertical continuity
+        // For cross-layout:
+        if my1 > ry2 {
+            my1 - ry2 // masked below regular - penalize
         } else {
-            1000.0 // Regular above masked - heavy pealty
+            -my2 // Masked above or overlaps - prefer higher position
+        }
+    } else {
+        // For single-column:
+        if ry1 >= my2 {
+            ry1 - my1 // Regular below - baseline alignment (top-to-top)
+        } else {
+            (my2 - ry1) * 10.0 // Regular above - scaled penalty
         }
     };
     distance += w3 * phi3;
@@ -133,7 +156,7 @@ pub fn compute_median_width<T: BoundingBox>(elements: &[T]) -> f32 {
         })
         .collect();
 
-    widths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    widths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
     let len = widths.len();
     if len % 2 == 1 {

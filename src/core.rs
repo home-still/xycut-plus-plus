@@ -326,20 +326,29 @@ impl XYCut {
         // This ensures top elements (like page titles) are inserted first
         // Sort by y first (top-to-bottom), then x (left-to-right) for same row
         let mut sort_masked: Vec<T> = masked_elements.to_vec();
+        // sort_masked.sort_by(|a, b| {
+        //     // First: Sort by semantic label priority (Equation 7)
+        //     let priority_a = Self::label_priority(a.semantic_label());
+        //     let priority_b = Self::label_priority(b.semantic_label());
+
+        //     // Compare priorities first
+        //     let priority_order = priority_a.cmp(&priority_b);
+
+        //     if priority_order != std::cmp::Ordering::Equal {
+        //         // Different priorities: use priority ordering
+        //         return priority_order;
+        //     }
+
+        //     // Same priority: sort by position (y, then x)
+        //     let y_diff = (a.center().1 - b.center().1).abs();
+        //     if y_diff < self.config.same_row_tolerance {
+        //         a.center().0.partial_cmp(&b.center().0).unwrap()
+        //     } else {
+        //         a.center().1.partial_cmp(&b.center().1).unwrap()
+        //     }
+        // });
+
         sort_masked.sort_by(|a, b| {
-            // First: Sort by semantic label priority (Equation 7)
-            let priority_a = Self::label_priority(a.semantic_label());
-            let priority_b = Self::label_priority(b.semantic_label());
-
-            // Compare priorities first
-            let priority_order = priority_a.cmp(&priority_b);
-
-            if priority_order != std::cmp::Ordering::Equal {
-                // Different priorities: use priority ordering
-                return priority_order;
-            }
-
-            // Same priority: sort by position (y, then x)
             let y_diff = (a.center().1 - b.center().1).abs();
             if y_diff < self.config.same_row_tolerance {
                 a.center().0.partial_cmp(&b.center().0).unwrap()
@@ -381,7 +390,7 @@ impl XYCut {
             if let Some(matched_id) = best_regular_id {
                 // Find where this element currently is in result (handles growing array)
                 if let Some(position) = result.iter().position(|&id| id == matched_id) {
-                    result.insert(position + 1, masked.id());
+                    result.insert(position, masked.id());
                 }
             } else {
                 // No overlap - find insertion by y-position AND x-position (column-aware)
@@ -427,6 +436,7 @@ impl XYCut {
                 result.insert(insert_pos, masked.id());
             }
         }
+
         result
     }
 

@@ -324,22 +324,6 @@ impl XYCutPlusPlus {
         indexed.iter().map(|(_, bbox)| bbox.id()).collect()
     }
 
-    fn compute_page_width<T: BoundingBox>(&self, elements: &[T]) -> f32 {
-        if elements.is_empty() {
-            return 0.0;
-        }
-        let x_min = elements
-            .iter()
-            .map(|e| e.bounds().0)
-            .fold(f32::INFINITY, f32::min);
-        let x_max = elements
-            .iter()
-            .map(|e| e.bounds().2)
-            .fold(f32::NEG_INFINITY, f32::max);
-
-        x_max - x_min
-    }
-
     fn merged_masked_elements<T: BoundingBox>(
         &self,
         regular_elements: &[T],

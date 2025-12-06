@@ -304,20 +304,16 @@ impl XYCutPlusPlus {
             .map(|(i, bbox)| (i, bbox.clone()))
             .collect();
 
+        // FIX: Use row quantization for transitive comparison
+        // The old approach with y_diff threshold violated total order:
+        // a vs b by X (small y_diff), b vs c by X (small y_diff), but a vs c by Y (large y_diff)
+        let row_height = self.config.same_row_tolerance;
         indexed.sort_by(|a, b| {
-            let y_diff = (a.1.center().1 - b.1.center().1).abs();
-            if y_diff < self.config.same_row_tolerance {
-                // Same row - sort by x
-                a.1.center()
-                    .0
-                    .partial_cmp(&b.1.center().0)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            } else {
-                // Different rows - sort by y
-                a.1.center()
-                    .1
-                    .partial_cmp(&b.1.center().1)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+            let a_row = (a.1.center().1 / row_height) as i32;
+            let b_row = (b.1.center().1 / row_height) as i32;
+            match a_row.cmp(&b_row) {
+                std::cmp::Ordering::Equal => a.1.center().0.total_cmp(&b.1.center().0),
+                other => other,
             }
         });
 
@@ -342,20 +338,16 @@ impl XYCutPlusPlus {
         }
 
         // Process each priority group in order (CrossLayout → Title → Vision → Regular)
+        let row_height = self.config.same_row_tolerance;
         for mut group in priority_groups {
             // Within each priority group, sort by reading order (y, then x)
+            // FIX: Use row quantization for transitive comparison
             group.sort_by(|a, b| {
-                let y_diff = (a.center().1 - b.center().1).abs();
-                if y_diff < self.config.same_row_tolerance {
-                    a.center()
-                        .0
-                        .partial_cmp(&b.center().0)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                } else {
-                    a.center()
-                        .1
-                        .partial_cmp(&b.center().1)
-                        .unwrap_or(std::cmp::Ordering::Equal)
+                let a_row = (a.center().1 / row_height) as i32;
+                let b_row = (b.center().1 / row_height) as i32;
+                match a_row.cmp(&b_row) {
+                    std::cmp::Ordering::Equal => a.center().0.total_cmp(&b.center().0),
+                    other => other,
                 }
             });
 

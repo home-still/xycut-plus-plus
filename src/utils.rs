@@ -155,7 +155,7 @@ pub fn compute_median_width<T: BoundingBox>(elements: &[T]) -> f32 {
         })
         .collect();
 
-    widths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    widths.sort_by(|a, b| a.total_cmp(b));
 
     let len = widths.len();
     if len % 2 == 1 {

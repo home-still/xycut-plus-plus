@@ -12,3 +12,4 @@ edition = "2021"
 authors = ["C. Thomas Brittain <cthomasbrittain@yahoo.com>"]
 
 [dependencies]
+tracing = "0.1"

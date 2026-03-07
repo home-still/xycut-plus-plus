@@ -60,8 +60,8 @@ impl XYCutPlusPlus {
             || page_width <= 0.0
             || page_height <= 0.0
         {
-            eprintln!(
-                "Warning: Invalid page dimensions ({}, {})",
+            tracing::warn!(
+                "Invalid page dimensions ({}, {})",
                 page_width, page_height
             );
 
@@ -138,14 +138,14 @@ impl XYCutPlusPlus {
         if try_vertical_first {
             // Try vertical cut first for multi-column layouts
             if let Some(x_cut) = self.find_vertical_cut(elements, x_min, x_max) {
-                eprintln!(
-                    "  [XYCut] Vertical cut at x={:.0}, splitting {} elements (multi-column)",
+                tracing::debug!(
+                    "[XYCut] Vertical cut at x={:.0}, splitting {} elements (multi-column)",
                     x_cut,
                     elements.len()
                 );
                 let (left, right) = self.split_vertical(elements, x_cut);
-                eprintln!(
-                    "    → Left: {} elements, Right: {} elements",
+                tracing::debug!(
+                    "  Left: {} elements, Right: {} elements",
                     left.len(),
                     right.len()
                 );
@@ -158,14 +158,14 @@ impl XYCutPlusPlus {
 
         // Try horizontal cut first (top-to-bottom reading)
         if let Some(y_cut) = self.find_horizontal_cut(elements, y_min, y_max) {
-            eprintln!(
-                "  [XYCut] Horizontal cut at y={:.0}, splitting {} elements",
+            tracing::debug!(
+                "[XYCut] Horizontal cut at y={:.0}, splitting {} elements",
                 y_cut,
                 elements.len()
             );
             let (top, bottom) = self.split_horizontal(elements, y_cut);
-            eprintln!(
-                "    → Top: {} elements, Bottom: {} elements",
+            tracing::debug!(
+                "  Top: {} elements, Bottom: {} elements",
                 top.len(),
                 bottom.len()
             );
@@ -177,14 +177,14 @@ impl XYCutPlusPlus {
 
         // Try vertical cut (left-to-right for multi-column)
         if let Some(x_cut) = self.find_vertical_cut(elements, x_min, x_max) {
-            eprintln!(
-                "  [XYCut] Vertical cut at x={:.0}, splitting {} elements",
+            tracing::debug!(
+                "[XYCut] Vertical cut at x={:.0}, splitting {} elements",
                 x_cut,
                 elements.len()
             );
             let (left, right) = self.split_vertical(elements, x_cut);
-            eprintln!(
-                "    → Left: {} elements, Right: {} elements",
+            tracing::debug!(
+                "  Left: {} elements, Right: {} elements",
                 left.len(),
                 right.len()
             );
@@ -195,8 +195,8 @@ impl XYCutPlusPlus {
         }
 
         // No valid cuts found - sort by position
-        eprintln!(
-            "  [XYCut] No cuts found, sorting {} elements by position",
+        tracing::debug!(
+            "[XYCut] No cuts found, sorting {} elements by position",
             elements.len()
         );
         self.sort_by_position(elements)
@@ -242,8 +242,8 @@ impl XYCutPlusPlus {
 
         // Debug: show histogram for large element counts
         if elements.len() > 15 {
-            eprintln!(
-                "    [Histogram] Vertical: {} bins, min_gap={}, x_range={:.0}-{:.0}",
+            tracing::debug!(
+                "[Histogram] Vertical: {} bins, min_gap={}, x_range={:.0}-{:.0}",
                 resolution, min_gap_bins, x_min, x_max
             );
         }
@@ -252,8 +252,8 @@ impl XYCutPlusPlus {
         if let Some(bin_index) = bin_index {
             let x_coord = x_min + (bin_index as f32 / resolution as f32) * (x_max - x_min);
             if elements.len() > 15 {
-                eprintln!(
-                    "    [Histogram] Found gap at bin {}, x={:.0}",
+                tracing::debug!(
+                    "[Histogram] Found gap at bin {}, x={:.0}",
                     bin_index, x_coord
                 );
             }
@@ -390,8 +390,8 @@ impl XYCutPlusPlus {
                 }
 
                 if let Some(position) = best_position {
-                    eprintln!(
-                        "  [INSERT] Masked element {} ({:?}) -> position {} (before element {})",
+                    tracing::debug!(
+                        "[INSERT] Masked element {} ({:?}) -> position {} (before element {})",
                         masked.id(),
                         masked.semantic_label(),
                         position,
@@ -400,8 +400,8 @@ impl XYCutPlusPlus {
                     result.insert(position, masked.id());
                 } else {
                     // No valid match found - append to end as a fallback
-                    eprintln!(
-                        "⚠️  No valid insertion for element {} ({:?}), appending",
+                    tracing::warn!(
+                        "No valid insertion for element {} ({:?}), appending",
                         masked.id(),
                         masked.semantic_label()
                     );
